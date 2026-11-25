@@ -1,0 +1,608 @@
+{
+  "info": {
+    "name": "DataClean · Validación de ejemplo",
+    "description": "En Collection Runner activa un retraso de 500 ms. En el paso 3 selecciona examples/customers.csv desde disco. Para el ejemplo JSONL cambia format a JSONL y selecciona examples/customers.jsonl.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "runId",
+      "value": ""
+    },
+    {
+      "key": "pollAttempts",
+      "value": "0"
+    },
+    {
+      "key": "correctedRunId",
+      "value": ""
+    },
+    {
+      "key": "correctionPollAttempts",
+      "value": "0"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Guardar esquema",
+      "request": {
+        "method": "PUT",
+        "url": {
+          "raw": "{{baseUrl}}/api/schemas/customers/versions/1",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "schemas",
+            "customers",
+            "versions",
+            "1"
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"delimiter\": \",\",\n  \"columns\": [\n    {\n      \"name\": \"id\",\n      \"type\": \"INTEGER\",\n      \"required\": true\n    },\n    {\n      \"name\": \"name\",\n      \"type\": \"STRING\",\n      \"required\": true,\n      \"maxLength\": 80\n    },\n    {\n      \"name\": \"country\",\n      \"type\": \"STRING\",\n      \"required\": true,\n      \"allowedValues\": [\n        \"ES\",\n        \"PT\"\n      ]\n    },\n    {\n      \"name\": \"registered\",\n      \"type\": \"DATE\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Esquema creado o ya disponible', () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));",
+              "if (pm.response.code >= 400) pm.execution.setNextRequest(null);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Consultar esquema",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/schemas/customers/versions/1",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "schemas",
+            "customers",
+            "versions",
+            "1"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Esquema de cuatro columnas', () => {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().columns.map(column => column.name)).to.eql(['id', 'name', 'country', 'registered']);",
+              "});",
+              "if (pm.response.code !== 200) pm.execution.setNextRequest(null);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Cargar archivo",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/runs",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "runs"
+          ]
+        },
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "schemaName",
+              "value": "customers",
+              "type": "text"
+            },
+            {
+              "key": "schemaVersion",
+              "value": "1",
+              "type": "text"
+            },
+            {
+              "key": "format",
+              "value": "CSV",
+              "type": "text"
+            },
+            {
+              "key": "sheet",
+              "value": "",
+              "type": "text",
+              "disabled": true
+            },
+            {
+              "key": "retainRecords",
+              "value": "true",
+              "type": "text"
+            },
+            {
+              "key": "file",
+              "type": "file",
+              "src": "examples/customers.csv"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.unset('runId');",
+              "pm.collectionVariables.set('pollAttempts', '0');",
+              "pm.test('Carga aceptada con ID de ejecución', () => {",
+              "    pm.response.to.have.status(202);",
+              "    pm.expect(pm.response.json().id).to.match(/^[0-9a-f-]{36}$/i);",
+              "    pm.collectionVariables.set('runId', pm.response.json().id);",
+              "});",
+              "if (!pm.collectionVariables.get('runId')) pm.execution.setNextRequest(null);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Consultar estado",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/runs/{{runId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "runs",
+            "{{runId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Estado accesible', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) {",
+              "    pm.execution.setNextRequest(null);",
+              "} else {",
+              "    const run = pm.response.json();",
+              "    const attempts = Number(pm.collectionVariables.get('pollAttempts') || '0') + 1;",
+              "    if (['QUEUED', 'RUNNING'].includes(run.state) && attempts < 25) {",
+              "        pm.collectionVariables.set('pollAttempts', String(attempts));",
+              "        pm.execution.setNextRequest(pm.info.requestId);",
+              "    } else {",
+              "        pm.test('Cuatro registros y dos inválidos', () => {",
+              "            pm.expect(run.state, run.error || 'Estado final').to.eql('COMPLETED');",
+              "            pm.expect(run.totalRows).to.eql(4);",
+              "            pm.expect(run.invalidRows).to.eql(2);",
+              "        });",
+              "        if (run.state !== 'COMPLETED') pm.execution.setNextRequest(null);",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Descargar incidencias",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/runs/{{runId}}/issues.csv",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "runs",
+            "{{runId}}",
+            "issues.csv"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('CSV con las cuatro incidencias esperadas', () => {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/csv');",
+              "    pm.expect(pm.response.text().trim().split(/\\r?\\n/)).to.eql([",
+              "        'row,column,code', '2,id,TYPE', '2,country,NOT_ALLOWED', '2,registered,TYPE', '3,name,REQUIRED'",
+              "    ]);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Consultar historial",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/runs?state=COMPLETED",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "runs"
+          ],
+          "query": [
+            {
+              "key": "state",
+              "value": "COMPLETED"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('El historial incluye la ejecución completada', () => {",
+              "    pm.response.to.have.status(200);",
+              "    const runs = pm.response.json();",
+              "    pm.expect(runs.every(run => run.state === 'COMPLETED')).to.be.true;",
+              "    pm.expect(runs.map(run => run.id)).to.include(pm.collectionVariables.get('runId'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Previsualizar incidencias",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/runs/{{runId}}/issues?limit=2",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "runs",
+            "{{runId}}",
+            "issues"
+          ],
+          "query": [
+            {
+              "key": "limit",
+              "value": "2"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Vista previa limitada y ordenada', () => {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().map(({row, column, code}) => [row, column, code])).to.eql([",
+              "        [2, 'id', 'TYPE'], [2, 'country', 'NOT_ALLOWED']",
+              "    ]);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Consultar versiones",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/schemas?prefix=customers",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "schemas"
+          ],
+          "query": [
+            {
+              "key": "prefix",
+              "value": "customers"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"8. Consultar versiones\", () => {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json()).to.deep.include({name:'customers', version:1});",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Descargar filas válidas",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/runs/{{runId}}/records/valid.jsonl",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "runs",
+            "{{runId}}",
+            "records",
+            "valid.jsonl"
+          ],
+          "query": []
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"9. Descargar filas válidas\", () => {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.text().trim().split(/\\r?\\n/).map(line => JSON.parse(line).id)).to.eql(['1','4']);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Descargar filas rechazadas",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/runs/{{runId}}/records/rejected.jsonl",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "runs",
+            "{{runId}}",
+            "records",
+            "rejected.jsonl"
+          ],
+          "query": []
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"10. Descargar filas rechazadas\", () => {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.text().trim().split(/\\r?\\n/).map(line => JSON.parse(line).row)).to.eql([2,3]);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Comprobar salud",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/actuator/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ],
+          "query": []
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"11. Comprobar salud\", () => {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(pm.response.json().status).to.eql('UP');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Confirmar correcciones",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{baseUrl}}/api/runs/{{runId}}/corrections",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "runs",
+            "{{runId}}",
+            "corrections"
+          ]
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"edits\": [\n    {\n      \"row\": 2,\n      \"column\": \"id\",\n      \"value\": \"2\"\n    },\n    {\n      \"row\": 2,\n      \"column\": \"country\",\n      \"value\": \"ES\"\n    },\n    {\n      \"row\": 2,\n      \"column\": \"registered\",\n      \"value\": \"2026-02-28\"\n    },\n    {\n      \"row\": 3,\n      \"column\": \"name\",\n      \"value\": \"Luis\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.unset('correctedRunId');",
+              "pm.collectionVariables.set('correctionPollAttempts', '0');",
+              "pm.test('Revalidación aceptada', () => {",
+              "    pm.response.to.have.status(202);",
+              "    pm.expect(pm.response.json().id).to.match(/^[0-9a-f-]{36}$/i);",
+              "    pm.collectionVariables.set('correctedRunId', pm.response.json().id);",
+              "});",
+              "if (!pm.collectionVariables.get('correctedRunId')) pm.execution.setNextRequest(null);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. Consultar revalidación",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/runs/{{correctedRunId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "runs",
+            "{{correctedRunId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Estado accesible', () => pm.response.to.have.status(200));",
+              "if (pm.response.code !== 200) {",
+              "    pm.execution.setNextRequest(null);",
+              "} else {",
+              "    const run = pm.response.json();",
+              "    const attempts = Number(pm.collectionVariables.get('correctionPollAttempts')) + 1;",
+              "    if (['QUEUED', 'RUNNING'].includes(run.state) && attempts < 25) {",
+              "        pm.collectionVariables.set('correctionPollAttempts', String(attempts));",
+              "        pm.execution.setNextRequest(pm.info.requestId);",
+              "    } else {",
+              "        pm.test('Vinculada al original con las cuatro filas válidas', () => {",
+              "            pm.expect(run.state, run.error || 'Estado final').to.eql('COMPLETED');",
+              "            pm.expect(run.parentRunId).to.eql(pm.collectionVariables.get('runId'));",
+              "            pm.expect(run.totalRows).to.eql(4);",
+              "            pm.expect(run.invalidRows).to.eql(0);",
+              "        });",
+              "        if (run.state !== 'COMPLETED') pm.execution.setNextRequest(null);",
+              "    }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14. Descargar archivo corregido",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/runs/{{correctedRunId}}/records/corrected.jsonl",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "runs",
+            "{{correctedRunId}}",
+            "records",
+            "corrected.jsonl"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('JSONL conserva el orden y contiene los cambios confirmados', () => {",
+              "    pm.response.to.have.status(200);",
+              "    const rows = pm.response.text().trim().split(/\\r?\\n/).map(line => JSON.parse(line));",
+              "    pm.expect(rows.map(row => row.id)).to.eql(['1','2','3','4']);",
+              "    pm.expect(rows[1].country).to.eql('ES');",
+              "    pm.expect(rows[1].registered).to.eql('2026-02-28');",
+              "    pm.expect(rows[2].name).to.eql('Luis');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

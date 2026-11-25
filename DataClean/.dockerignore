@@ -1,0 +1,27 @@
+# Build output and dependencies (the image rebuilds them)
+target
+frontend/node_modules
+frontend/dist
+frontend/.angular
+
+# Version control, IDE and tooling state
+.git
+.idea
+.vscode
+*.iml
+.claude
+.claude-flow
+
+# Secrets and local environment
+.env
+.env.*
+
+# Not needed to build or run the image
+docs
+examples
+postman
+scripts
+.github
+compose.yml
+*.md
+*.log

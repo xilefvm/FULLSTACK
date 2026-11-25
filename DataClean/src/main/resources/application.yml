@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: dataclean
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/dataclean}
+    username: ${DB_USER:dataclean}
+    password: ${DB_PASSWORD:dataclean}
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: never
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 21MB
+  mvc:
+    problemdetails:
+      enabled: true
+    async:
+      request-timeout: 120s
+server:
+  error:
+    include-message: never
+dataclean:
+  poll-ms: 500
+  worker:
+    enabled: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics

@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:18.7
+    environment:
+      POSTGRES_DB: dataclean
+      POSTGRES_USER: dataclean
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-dataclean}
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "dataclean", "-d", "dataclean"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATACLEAN_WORKER_ENABLED: 'false'
+      DB_URL: jdbc:postgresql://db:5432/dataclean
+      DB_USER: dataclean
+      DB_PASSWORD: ${DB_PASSWORD:-dataclean}
+    ports:
+      - "127.0.0.1:${DATACLEAN_PORT:-8080}:8080"
+  worker:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_MAIN_WEB_APPLICATION_TYPE: none
+      DATACLEAN_WORKER_ENABLED: 'true'
+      DB_URL: jdbc:postgresql://db:5432/dataclean
+      DB_USER: dataclean
+      DB_PASSWORD: ${DB_PASSWORD:-dataclean}
+volumes:
+  pgdata:
