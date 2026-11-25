@@ -23,7 +23,7 @@ Soluciones reales que combinan front-end y back-end. Cada proyecto vive en su pr
 
 | Proyecto | Descripción | Estado |
 |----------|-------------|--------|
-| 🧹 [DataClean](./DataClean) | Limpieza y tratamiento de datos | 🚧 En desarrollo |
+| 🧹 [DataClean](./DataClean) | Limpieza y tratamiento de datos | ✅ Estable |
 
 > Cada proyecto nuevo añade una fila a esta tabla con su nombre, una línea de descripción y su estado (🚧 en desarrollo, ✅ estable, 🗄️ archivado). Las tecnologías de cada proyecto se detallan en su propio README.
 
