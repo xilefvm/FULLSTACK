@@ -1,9 +1,0 @@
-{
-  "delimiter": ",",
-  "columns": [
-    {"name": "id", "type": "INTEGER", "required": true},
-    {"name": "name", "type": "STRING", "required": true, "maxLength": 80},
-    {"name": "country", "type": "STRING", "required": true, "allowedValues": ["ES", "PT"]},
-    {"name": "registered", "type": "DATE"}
-  ]
-}
