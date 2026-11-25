@@ -1,0 +1,27 @@
+# Build output and dependencies
+/target/
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.angular/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.github
+
+# Tooling and local agent state
+.claude-flow/
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini

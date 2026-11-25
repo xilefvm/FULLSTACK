@@ -1,0 +1,215 @@
+<aside class="sidebar">
+  <a class="brand" href="/">Data<span>Clean</span></a>
+  <nav aria-label="Secciones">
+    <a href="#carga">Validar archivo</a>
+    <a href="#esquemas">Esquemas</a>
+    <a href="#resultados">Resultados</a>
+    <a href="#historial">Historial</a>
+  </nav>
+  <a class="contract" href="/openapi.yaml">Contrato OpenAPI ↗</a>
+</aside>
+<main>
+  <header class="page-header">
+    <div><h1>Validación de archivos</h1><p>Comprueba CSV, JSONL y Excel con un esquema versionado.</p></div>
+  </header>
+  <div class="workspace">
+    <section id="carga" class="panel">
+      <h2>Validar archivo</h2>
+      <form #uploadForm (submit)="submit($event, uploadForm)">
+        <label for="input-file" class="drop">
+          <span class="upload-icon" aria-hidden="true">↑</span>
+          <strong>{{ fileName() || 'Seleccionar archivo' }}</strong>
+          <small>CSV, JSONL o XLSX · hasta 20 MiB</small>
+          <input #file type="file" id="input-file" name="file" accept=".csv,.jsonl,.xlsx" required
+                 (change)="selectFile(file.files?.item(0))">
+        </label>
+        <div class="fields">
+          <label>Esquema<input #uploadSchema name="schemaName" [value]="uploadName()" (input)="uploadName.set(uploadSchema.value)" [pattern]="schemaPattern" required></label>
+          <label>Versión<input #uploadVersionInput name="schemaVersion" type="number" min="1" max="2147483647" [value]="uploadVersion()" (input)="uploadVersion.set(uploadVersionInput.value)" required></label>
+        </div>
+        <label>Versiones registradas
+          <select #versionPicker (change)="useVersion(versionPicker.value); versionPicker.value = ''">
+            <option value="">Seleccionar esquema y versión</option>
+            @for (entry of versions(); track entry.name + ':' + entry.version) {
+              <option [value]="entry.name + ':' + entry.version">{{ entry.name }} v{{ entry.version }}</option>
+            }
+          </select>
+        </label>
+        <p class="message error" role="status">{{ versionsError() }}</p>
+        @if (!versions().length && !versionsError()) {
+          <p class="history-note">Aún no hay esquemas guardados. Crea uno en Esquemas.</p>
+        }
+        <label>Formato<select #formatSelect name="format" [value]="format()" (change)="changeFormat(formatSelect.value)">
+          <option value="CSV">CSV</option><option value="JSONL">JSONL</option><option value="XLSX">XLSX</option>
+        </select></label>
+        @if (format() === 'XLSX') {
+          <label>Hoja de Excel <small>(opcional)</small><input name="sheet" maxlength="31" placeholder="Primera hoja"></label>
+        }
+        <label class="check"><input type="checkbox" name="retainRecords" value="true"> Conservar filas para descarga durante 7 días</label>
+        <button type="submit" [disabled]="uploadBusy()">Iniciar validación</button>
+        <p class="message" role="status" [class.error]="uploadMessage().error">{{ uploadMessage().text }}</p>
+      </form>
+    </section>
+    <section id="resultados" class="panel">
+      <h2>Resultados</h2>
+      <form class="lookup" (submit)="lookup($event, runInput.value)">
+        <label>ID de ejecución<input #runInput name="id" [value]="runId()" placeholder="UUID de la ejecución"
+          required pattern="[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"></label>
+        <button class="secondary" type="submit">Buscar</button>
+      </form>
+      <p class="status" role="status">{{ status() }}</p>
+      <dl class="metrics">
+        <div><dt>Procesadas</dt><dd>{{ metric(run()?.totalRows) }}</dd></div>
+        <div><dt>Válidas</dt><dd>{{ metric(validRows()) }}</dd></div>
+        <div><dt>Inválidas</dt><dd>{{ metric(run()?.invalidRows) }}</dd></div>
+      </dl>
+      @if (run()?.parentRunId; as parentId) {
+        <p class="history-note">
+          <a href="#resultados" (click)="openRun(parentId)">Ver ejecución original</a>
+          @if (original(); as parent) {
+            · Filas inválidas en la original: {{ metric(parent.invalidRows) }}
+          }
+        </p>
+      }
+      @if (run()?.state === 'COMPLETED') {
+        <a class="button" [href]="'/api/runs/' + runId() + '/issues.csv'">Descargar incidencias CSV</a>
+        @if (run()?.recordsExpiresAt; as expiry) {
+          @if (canDownloadRows(expiry)) {
+            <div class="actions row-downloads">
+              <a class="button secondary" [href]="'/api/runs/' + runId() + '/records/valid.jsonl'">Filas válidas</a>
+              <a class="button secondary" [href]="'/api/runs/' + runId() + '/records/rejected.jsonl'">Filas rechazadas</a>
+              @if (run()?.parentRunId) {
+                <a class="button secondary" [href]="'/api/runs/' + runId() + '/records/corrected.jsonl'">Archivo corregido</a>
+              }
+            </div>
+            <p class="history-note">Disponibles hasta {{ date(expiry) }}.</p>
+          } @else { <p class="history-note">Las descargas de filas han caducado.</p> }
+        }
+        @if (issues(); as preview) {
+          @if (preview.length) {
+            <div class="table-wrap">
+              <table>
+                <caption>Primeras 20 incidencias</caption>
+                <thead><tr><th scope="col">Fila</th><th scope="col">Columna</th><th scope="col">Código</th><th scope="col">Sugerencia</th></tr></thead>
+                <tbody>
+                  @for (issue of preview; track issue.row + ':' + issue.index) {
+                    <tr><td>{{ issue.row }}</td><td>{{ issue.column || '—' }}</td><td>{{ issue.code }}</td>
+                      <td>{{ correction(issue) }}
+                        @if (issue.column && run()?.recordsExpiresAt && canDownloadRows(run()!.recordsExpiresAt!)) {
+                          <details class="issue-edit">
+                            <summary>Editar valor</summary>
+                            @for (candidate of issue.suggestion?.candidates ?? []; track candidate) {
+                              <button type="button" class="secondary" (click)="stageEdit(issue, candidate)">Elegir {{ candidate }}</button>
+                            }
+                            <label>Nuevo valor<input #manual maxlength="4096"></label>
+                            <button type="button" class="secondary" (click)="stageEdit(issue, manual.value)">Añadir cambio</button>
+                          </details>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else { <p class="history-note">Sin incidencias.</p> }
+        } @else if (!issueError()) { <p class="history-note">Cargando incidencias…</p> }
+        <p class="message error" role="status">{{ issueError() }}</p>
+        @if (edits().length) {
+          <section class="review-changes" aria-label="Cambios para revalidar">
+            <h3>Cambios para revalidar</h3>
+            <ul>
+              @for (edit of edits(); track edit.row + ':' + edit.column) {
+                <li>Fila {{ edit.row }}, {{ edit.column }} → {{ edit.value || '(vacío)' }}
+                  <button class="secondary" type="button" (click)="removeEdit(edit)">Quitar</button>
+                </li>
+              }
+            </ul>
+            <button type="button" [disabled]="correctionBusy()" (click)="revalidate()">Confirmar y revalidar</button>
+            <p class="message error" role="status">{{ correctionMessage().text }}</p>
+          </section>
+        }
+      }
+      <p class="message error" role="status">{{ runError() }}</p>
+    </section>
+  </div>
+  <section id="historial" class="panel">
+    <h2>Historial de ejecuciones</h2>
+    <div class="history-controls">
+      <label>Estado<select #historyFilter [value]="historyState()" (change)="filterHistory(historyFilter.value)">
+        <option value="">Todos</option><option value="QUEUED">En cola</option>
+        <option value="RUNNING">Procesando</option><option value="COMPLETED">Completadas</option>
+        <option value="FAILED">Fallidas</option>
+      </select></label>
+      <button class="secondary" type="button" [disabled]="historyBusy()" (click)="loadHistory()">Actualizar historial</button>
+    </div>
+    <p class="message error" role="status">{{ historyError() }}</p>
+    @if (history().length) {
+      <div class="table-wrap">
+        <table>
+          <caption>Últimas 25 ejecuciones del filtro</caption>
+          <thead><tr><th scope="col">Fecha</th><th scope="col">Esquema</th><th scope="col">Formato</th>
+            <th scope="col">Estado</th><th scope="col">Inválidas</th><th scope="col">Detalle</th></tr></thead>
+          <tbody>
+            @for (entry of history(); track entry.id) {
+              <tr><td>{{ date(entry.submittedAt) }}</td><td>{{ entry.schemaName }} v{{ entry.schemaVersion }}</td>
+                <td>{{ entry.format }}</td><td>{{ stateLabels[entry.state] }}</td>
+                <td>{{ metric(entry.invalidRows) }}</td>
+                <td><a href="#resultados" (click)="openRun(entry.id)" [attr.aria-label]="'Abrir ejecución ' + entry.id">Abrir</a></td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else if (!historyError()) {
+      <p class="history-note" role="status">{{ historyBusy() ? 'Cargando historial…' : 'No hay ejecuciones para este filtro.' }}</p>
+    }
+  </section>
+  <section id="esquemas" class="panel">
+    <h2>Esquemas versionados</h2>
+    <form (submit)="save($event, schemaName.value, schemaVersion.value, definitionInput.value)">
+      <div class="fields">
+        <label>Nombre<input #schemaName [pattern]="schemaPattern" required></label>
+        <label>Versión<input #schemaVersion type="number" min="1" max="2147483647" value="1" required></label>
+      </div>
+      <label>Definición JSON<textarea #definitionInput [value]="definition()" [readOnly]="visual() !== null" rows="8" spellcheck="false" required></textarea></label>
+      @if (visual(); as columns) {
+        @for (column of columns; track $index; let i = $index) {
+          <fieldset class="column-editor">
+            <legend>Columna {{ i + 1 }}</legend>
+            <div class="fields">
+              <label>Nombre<input #columnName [value]="field(column, 'name')" (input)="updateColumn(i, 'name', columnName.value)" />
+              </label>
+              <label>Tipo<select #columnType [value]="field(column, 'type')" (change)="updateColumn(i, 'type', columnType.value)">
+                @for (type of columnTypes; track type) { <option [value]="type">{{ type }}</option> }
+              </select></label>
+            </div>
+            <label class="check"><input #required type="checkbox" [checked]="column['required'] === true" (change)="updateColumn(i, 'required', required.checked)"> Obligatoria</label>
+            <label class="check"><input #unique type="checkbox" [checked]="column['unique'] === true" (change)="updateColumn(i, 'unique', unique.checked)"> Única</label>
+            @if (column['type'] === 'INTEGER' || column['type'] === 'DECIMAL') {
+              <div class="fields">
+                <label>Mínimo<input #min type="number" step="any" [value]="field(column, 'min')" (input)="numericField(i, 'min', min.value)"></label>
+                <label>Máximo<input #max type="number" step="any" [value]="field(column, 'max')" (input)="numericField(i, 'max', max.value)"></label>
+              </div>
+            }
+            @if (column['type'] === 'STRING') {
+              <label class="check"><input #email type="checkbox" [checked]="column['format'] === 'EMAIL'" (change)="updateColumn(i, 'format', email.checked ? 'EMAIL' : null)"> Correo electrónico</label>
+            }
+            <label>Valor predeterminado<input #defaultValue [value]="field(column, 'defaultValue')" (input)="updateColumn(i, 'defaultValue', defaultValue.value || null)"></label>
+            <button class="secondary" type="button" (click)="removeColumn(i)">Quitar columna</button>
+          </fieldset>
+        }
+        <div class="actions">
+          <button class="secondary" type="button" [disabled]="columns.length >= 100" (click)="addColumn()">Añadir columna</button>
+          <button type="button" [disabled]="!columns.length" (click)="applyVisual(definitionInput)">Usar estas columnas</button>
+          <button class="secondary" type="button" (click)="visual.set(null)">Cancelar edición</button>
+        </div>
+      } @else {
+        <button class="secondary" type="button" [disabled]="schemaBusy()" (click)="startVisual(definitionInput.value)">Editar columnas visualmente</button>
+      }
+      <div class="actions">
+        <button type="submit" [disabled]="schemaBusy() || visual() !== null">Guardar versión</button>
+        <button class="secondary" type="button" [disabled]="schemaBusy() || visual() !== null" (click)="load(schemaName, schemaVersion)">Consultar versión</button>
+      </div>
+      <p class="message" role="status" [class.error]="schemaMessage().error">{{ schemaMessage().text }}</p>
+    </form>
+  </section>
+</main>
